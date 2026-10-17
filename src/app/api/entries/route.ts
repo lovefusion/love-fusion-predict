@@ -163,8 +163,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const receiptCode    = generateReceiptCode();
   const privateToken   = generatePrivateToken();
   const submittedAt    = new Date();
-  const participantId  = nanoid(21);
-  const entryId        = nanoid(21);
+  const participantId  = crypto.randomUUID();
+  const entryId        = crypto.randomUUID();
 
   try {
     // Upsert participant
@@ -197,8 +197,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const predValues = preds.flatMap((pred) => {
       const group = groupRows.find((g) => g.label === pred.groupLabel)!;
       return [
-        { id: nanoid(21), entryId, groupId: group.id, teamId: pred.teamId1 },
-        { id: nanoid(21), entryId, groupId: group.id, teamId: pred.teamId2 },
+{ id: crypto.randomUUID(), entryId, groupId: group.id, teamId: pred.teamId1 },
+{ id: crypto.randomUUID(), entryId, groupId: group.id, teamId: pred.teamId2 },
       ];
     });
     await db.insert(predictions).values(predValues);

@@ -615,6 +615,7 @@ function ResultsTab({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!contest) return;
     if (!operatorId) {
       setError("Select an operator from the dropdown.");
       return;

@@ -95,7 +95,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return errorResponse("CONTEST_NOT_OPEN", "This contest is not currently accepting entries.", 403);
   }
   const now = Date.now();
-  if (now >= new Date(contest.entryDeadline).getTime()) {
+  if (contest.entryDeadline && now >= new Date(contest.entryDeadline).getTime()) {
     return errorResponse("DEADLINE_PASSED", "The entry deadline has passed.", 403);
   }
 

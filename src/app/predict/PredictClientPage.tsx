@@ -258,12 +258,18 @@ function LandingStep({
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-obsidian-900/60 to-obsidian-900 pointer-events-none" aria-hidden />
 
         <div className="relative z-10 max-w-2xl mx-auto">
-{/* Logo mark */}
-<div className="mb-8 flex justify-center">
-  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center shadow-gold-strong">
-    <span className="text-3xl" role="img" aria-label="shuttlecock">🏸</span>
-  </div>
-</div>
+          {/* Logo mark */}
+          <div className="mb-8 flex justify-center">
+            <div className="w-24 h-24 rounded-full overflow-hidden shadow-gold-strong ring-2 ring-gold-400/30">
+              <img
+                src="https://res.cloudinary.com/vsaxxzft/image/upload/w_192,h_192,c_fill/love-fusion/logo"
+                alt="Love Fusion Cup"
+                width={96}
+                height={96}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          </div>
 
           <Badge variant="gold" className="mb-4 text-xs tracking-wide uppercase">
             🏆 Win {prizeDisplay}

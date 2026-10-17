@@ -1311,7 +1311,7 @@ function AuditLogTab({
                   >
                     {entry.action}
                   </span>
-                  {entry.details?.from && entry.details?.to && (
+                  {entry.details?.from != null && entry.details?.to != null && (
                     <span className="text-white/30 text-xs ml-2">
                       {String(entry.details.from)} → {String(entry.details.to)}
                     </span>

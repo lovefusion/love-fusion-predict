@@ -1,0 +1,174 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── CSS Custom Properties ─────────────────────────────────── */
+:root {
+  --gold-primary: #d4af37;
+  --gold-light: #f0d060;
+  --gold-dark: #a07c20;
+  --obsidian: #0a0a0b;
+  --obsidian-card: #111113;
+  --obsidian-border: #1e1e22;
+  --white: #ffffff;
+  --white-muted: rgba(255, 255, 255, 0.7);
+}
+
+/* ─── Base Resets ───────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-obsidian-800;
+  }
+
+  html {
+    @apply scroll-smooth antialiased;
+    font-feature-settings: "liga" 1, "kern" 1;
+  }
+
+  body {
+    @apply bg-obsidian-900 text-white min-h-screen;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(212, 175, 55, 0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(212, 175, 55, 0.03) 0%, transparent 50%);
+  }
+
+  ::selection {
+    background-color: rgba(212, 175, 55, 0.3);
+    color: #ffffff;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-1.5;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0a0a0b;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1e1e22;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #d4af37;
+  }
+}
+
+/* ─── Gold Shimmer Overlay ──────────────────────────────────── */
+@layer utilities {
+  .gold-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .gold-shimmer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(212, 175, 55, 0.12),
+      transparent
+    );
+    animation: shimmer 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .text-gradient-gold {
+    background: linear-gradient(135deg, #f0d060 0%, #d4af37 50%, #a07c20 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-white-gold {
+    background: linear-gradient(135deg, #ffffff 0%, #d4af37 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .card-glow {
+    box-shadow:
+      0 0 0 1px rgba(212, 175, 55, 0.12),
+      0 4px 24px rgba(0, 0, 0, 0.4),
+      0 0 40px rgba(212, 175, 55, 0.04);
+  }
+
+  .card-glow-hover {
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+  }
+
+  .card-glow-hover:hover {
+    box-shadow:
+      0 0 0 1px rgba(212, 175, 55, 0.3),
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      0 0 60px rgba(212, 175, 55, 0.08);
+    transform: translateY(-2px);
+  }
+
+  .border-gold-subtle {
+    border: 1px solid rgba(212, 175, 55, 0.18);
+  }
+
+  .border-gold-active {
+    border: 1px solid rgba(212, 175, 55, 0.6);
+  }
+
+  .bg-glass {
+    background: rgba(17, 17, 19, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .bg-glass-dark {
+    background: rgba(10, 10, 11, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  /* Sparkle dot pattern */
+  .sparkle-bg {
+    background-image: radial-gradient(circle, rgba(212, 175, 55, 0.15) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
+
+/* ─── Keyframes ─────────────────────────────────────────────── */
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 200%; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(212, 175, 55, 0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ─── Focus Ring ─────────────────────────────────────────────── */
+@layer base {
+  *:focus-visible {
+    outline: 2px solid rgba(212, 175, 55, 0.7);
+    outline-offset: 2px;
+  }
+}

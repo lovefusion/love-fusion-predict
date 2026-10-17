@@ -1,10 +1,12 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export function Spinner({ className }: { className?: string }) {
+const sizeMap = { sm: "h-4 w-4", md: "h-5 w-5", lg: "h-8 w-8" };
+
+export function Spinner({ className, size = "md" }: { className?: string; size?: "sm" | "md" | "lg" }) {
   return (
     <svg
-      className={cn("animate-spin h-5 w-5 text-gold-400", className)}
+      className={cn("animate-spin text-gold-400", sizeMap[size], className)}
       fill="none"
       viewBox="0 0 24 24"
       aria-hidden="true"

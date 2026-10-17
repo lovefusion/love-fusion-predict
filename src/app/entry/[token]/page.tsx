@@ -46,5 +46,5 @@ export default async function EntryPage({ params }: PageProps) {
     notFound();
   }
 
-  return <EntryReceiptClient entry={entry} />;
+  return <EntryReceiptClient entry={entry!} />;
 }

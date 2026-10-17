@@ -262,7 +262,7 @@ function LandingStep({
           <div className="mb-8 flex justify-center">
             <div className="w-24 h-24 rounded-full overflow-hidden shadow-gold-strong ring-2 ring-gold-400/30">
               <img
-                src="https://res.cloudinary.com/vsaxxzft/image/upload/w_192,h_192,c_fill/love-fusion/logo"
+                src={`https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/w_192,h_192,c_fill/love-fusion/logo`}
                 alt="Love Fusion Cup"
                 width={96}
                 height={96}

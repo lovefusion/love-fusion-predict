@@ -270,7 +270,7 @@ function OverviewTab({
               <div className="flex items-center justify-between">
                 <span className="text-white/70">Deadline</span>
                 <span className="text-white text-sm">
-                  {con   {contest.deadline ? formatDate(contest.deadline) : "—"}
+                    {contest.entryDeadline ? formatDate(contest.entryDeadline) : "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between">

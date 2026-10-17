@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { entries, participants, predictions, groups, teams, scores, prizeAllocations, contests } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { errorResponse } from "@/lib/api-helpers";
 import type { EntryReceiptView, GroupLabel } from "@/lib/types";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
@@ -56,43 +56,45 @@ export async function GET(
     .where(eq(contests.id, entry.contestId))
     .limit(1);
 
-  // Load predictions with team names
+  // Load all predictions for this entry — each row has one teamId
+  // There are 2 rows per group (one per predicted qualifier)
   const predRows = await db
     .select({
+      groupId:    predictions.groupId,
+      teamId:     predictions.teamId,
       groupLabel: groups.label,
-      team1Name:  teams.name,
-      teamId1:    predictions.teamId1,
-      teamId2:    predictions.teamId2,
+      teamName:   teams.name,
     })
     .from(predictions)
     .innerJoin(groups, eq(groups.id, predictions.groupId))
-    .innerJoin(teams, eq(teams.id, predictions.teamId1))
+    .innerJoin(teams, eq(teams.id, predictions.teamId))
     .where(eq(predictions.entryId, entry.id));
 
-  // Resolve team2 names separately (can't double-join same table easily)
-  const team2Names = await Promise.all(
-    predRows.map((p) =>
-      db
-        .select({ name: teams.name })
-        .from(teams)
-        .where(eq(teams.id, p.teamId2))
-        .limit(1)
-        .then((rows) => rows[0]?.name ?? p.teamId2),
-    ),
-  );
+  // Group by groupLabel — collect up to 2 team names per group
+  const groupMap = new Map<GroupLabel, string[]>();
+  for (const row of predRows) {
+    const label = row.groupLabel as GroupLabel;
+    if (!groupMap.has(label)) groupMap.set(label, []);
+    groupMap.get(label)!.push(row.teamName);
+  }
 
-  const predictionViews = predRows.map((p, i) => ({
-    groupLabel: p.groupLabel as GroupLabel,
-    team1Name:  p.team1Name,
-    team2Name:  team2Names[i],
-  }));
+  const predictionViews = (["A", "B", "C", "D"] as GroupLabel[])
+    .filter((label) => groupMap.has(label))
+    .map((label) => {
+      const teamNames = groupMap.get(label)!;
+      return {
+        groupLabel: label,
+        team1Name:  teamNames[0] ?? "",
+        team2Name:  teamNames[1] ?? "",
+      };
+    });
 
   // Load scores if available
   const scoreRows = await db
     .select()
     .from(scores)
     .where(eq(scores.entryId, entry.id))
-    .limit(4);
+    .limit(1);
 
   // Load prize allocation if available
   const [prize] = await db
@@ -101,21 +103,20 @@ export async function GET(
     .where(eq(prizeAllocations.entryId, entry.id))
     .limit(1);
 
-  const scoreViews = scoreRows.length > 0
-    ? scoreRows.map((s) => ({
-        groupLabel: s.groupLabel as GroupLabel,
-        score: s.score as 0 | 1,
+  // scores table has groupScores JSON: { A: 0|1, B: 0|1, C: 0|1, D: 0|1 }
+  const scoreViews = scoreRows.length > 0 && scoreRows[0].groupScores
+    ? (["A", "B", "C", "D"] as GroupLabel[]).map((label) => ({
+        groupLabel: label,
+        score: (scoreRows[0].groupScores as Record<string, 0 | 1>)[label] ?? 0 as 0 | 1,
       }))
     : undefined;
 
-  const totalScore = scoreViews
-    ? scoreViews.reduce((sum, s) => sum + s.score, 0)
-    : undefined;
+  const totalScore = scoreRows.length > 0 ? scoreRows[0].totalScore : undefined;
 
   const body: EntryReceiptView = {
     entryId:          entry.id,
     receiptCode:      entry.receiptCode,
-    participantName:  participant?.name ?? "Participant",
+    participantName:  participant?.fullName ?? "Participant",
     submittedAt:      entry.submittedAt.toISOString(),
     predictions:      predictionViews,
     scores:           scoreViews,

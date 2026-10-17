@@ -2,7 +2,7 @@
 # Love Fusion Predict — Netlify (paid) deployment
 
 [build]
-  command = "   command = "npm install && npm run build"
+  command = "npm install && npm run build"
   publish = ".next"
 
 [build.environment]
@@ -21,7 +21,6 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy      = "strict-origin-when-cross-origin"
     Permissions-Policy   = "camera=(), microphone=(), geolocation=()"
-    # Content Security Policy — adjust Cloudinary cloud name after setting env var
     Content-Security-Policy = """
       default-src 'self';
       script-src 'self' 'unsafe-inline' 'unsafe-eval';
@@ -38,20 +37,6 @@
   to     = "/predict"
   status = 302
 
-# ─── Environment variable docs (set in Netlify UI, NOT here) ─────────────────
-# DATABASE_URL               — Neon PostgreSQL connection string
-# NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
-# CLOUDINARY_API_KEY
-# CLOUDINARY_API_SECRET
-# ADMIN_SECRET_KEY           — For /admin endpoints
-# ADMIN_EMAILS               — Comma-separated admin emails
-# CONTEST_ENTRY_DEADLINE     — ISO 8601, e.g. 2026-10-24T04:30:00Z
-# CONTEST_PRIZE_POOL_PAISE   — Integer, e.g. 1100000
-# CRON_SECRET                — For Netlify scheduled function auth
-# N8N_WEBHOOK_URL            — Optional: notification webhook
-# N8N_WEBHOOK_SECRET         — Optional
-# NEXT_PUBLIC_BASE_URL       — e.g. https://lovefusion.netlify.app
-
 # ─── Scheduled function: auto-close at entry deadline ─────────────────────────
 [functions."scheduled-auto-close"]
-  schedule = "0 4 24 10 *"    # 04:00 UTC = 09:30 IST on 24 Oct — just before 10:00 AM IST deadline
+  schedule = "0 4 24 10 *"

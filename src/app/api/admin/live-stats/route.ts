@@ -8,7 +8,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { entries, predictions, groups, teams } from "@/db/schema";
-import { eq, count, sql } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
 import { errorResponse } from "@/lib/api-helpers";
 
 export const runtime = "edge";
@@ -21,27 +21,18 @@ export async function GET(): Promise<NextResponse> {
       .select({ totalEntries: count(entries.id) })
       .from(entries);
 
-    // Pick counts per team (across all predictions)
+    // Pick counts per team (one prediction row per group per entry)
     const pickCounts = await db
       .select({
-        teamId:    predictions.teamId1,
+        teamId:    predictions.teamId,
         pickCount: count(predictions.id),
       })
       .from(predictions)
-      .groupBy(predictions.teamId1);
+      .groupBy(predictions.teamId);
 
-    // Also count teamId2 picks
-    const pickCounts2 = await db
-      .select({
-        teamId:    predictions.teamId2,
-        pickCount: count(predictions.id),
-      })
-      .from(predictions)
-      .groupBy(predictions.teamId2);
-
-    // Merge pick counts
+    // Build count map
     const countMap = new Map<string, number>();
-    for (const row of [...pickCounts, ...pickCounts2]) {
+    for (const row of pickCounts) {
       countMap.set(row.teamId, (countMap.get(row.teamId) ?? 0) + row.pickCount);
     }
 

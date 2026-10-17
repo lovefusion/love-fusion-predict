@@ -118,11 +118,12 @@ export async function POST(request: NextRequest) {
   const groupLabelById = Object.fromEntries(groupRows.map((g) => [g.id, g.label]));
 
   // Build official qualifier map keyed by group label
-  const officialQualifiers: Record<string, QualifierPair> = {};
+  type GroupLabel = "A" | "B" | "C" | "D";
+  const officialQualifiers: Record<GroupLabel, QualifierPair> = {} as Record<GroupLabel, QualifierPair>;
   for (const row of resultRows) {
-    const label = groupLabelById[row.groupId];
+    const label = groupLabelById[row.groupId] as GroupLabel | undefined;
     if (label) {
-      officialQualifiers[label] = { teamId1: row.qualifier1Id, teamId2: row.qualifier2Id };
+      officialQualifiers[label] = { qualifier1Id: row.qualifier1Id, qualifier2Id: row.qualifier2Id };
     }
   }
 
@@ -149,17 +150,19 @@ export async function POST(request: NextRequest) {
     .where(eq(entries.contestId, contestId));
 
   // Group predictions by entryId, resolving groupId → label
-  const predsByEntry: Record<string, PredictionPair[]> = {};
+  // Each group gets exactly 2 teamIds → stored as teamId1/teamId2 in PredictionPair
+  const predsByEntry: Record<string, Record<GroupLabel, PredictionPair>> = {};
   for (const pred of predRows) {
-    if (!predsByEntry[pred.entryId]) predsByEntry[pred.entryId] = [];
-    const label = groupLabelById[pred.groupId] as "A" | "B" | "C" | "D" | undefined;
+    if (!predsByEntry[pred.entryId]) {
+      predsByEntry[pred.entryId] = {} as Record<GroupLabel, PredictionPair>;
+    }
+    const label = groupLabelById[pred.groupId] as GroupLabel | undefined;
     if (label) {
-      // Check if pair for this group already exists
-      const existingIdx = predsByEntry[pred.entryId].findIndex((p) => p.groupLabel === label);
-      if (existingIdx === -1) {
-        predsByEntry[pred.entryId].push({ groupLabel: label, teamId1: pred.teamId, teamId2: "" });
+      const existing = predsByEntry[pred.entryId][label];
+      if (!existing) {
+        predsByEntry[pred.entryId][label] = { teamId1: pred.teamId, teamId2: "" };
       } else {
-        predsByEntry[pred.entryId][existingIdx].teamId2 = pred.teamId;
+        predsByEntry[pred.entryId][label] = { teamId1: existing.teamId1, teamId2: pred.teamId };
       }
     }
   }
@@ -180,7 +183,7 @@ export async function POST(request: NextRequest) {
   }> = [];
 
   for (const entry of entryRows) {
-    const preds = predsByEntry[entry.id] ?? [];
+    const preds = predsByEntry[entry.id] ?? ({} as Record<GroupLabel, PredictionPair>);
     const { totalScore, groupScores } = scoreEntry(preds, officialQualifiers);
 
     scoredEntries.push({

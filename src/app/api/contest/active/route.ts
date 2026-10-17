@@ -58,7 +58,7 @@ export async function GET(): Promise<NextResponse> {
           id:               t.id,
           name:             t.name,
           groupLabel:       g.label as GroupLabel,
-          ownerNames:       t.ownerNames,
+          ownerNames:       t.ownerNames ?? "",
           captainName:      t.captainName ?? null,
           logoUrl:          t.logoUrl ?? null,
           captainImageUrl:  t.captainImageUrl ?? null,
@@ -66,17 +66,17 @@ export async function GET(): Promise<NextResponse> {
     }));
 
     const now = Date.now();
-    const deadline = new Date(contest.entryDeadline).getTime();
+    const deadline = contest.entryDeadline ? new Date(contest.entryDeadline).getTime() : Infinity;
 
     const body: ContestPublicInfo = {
       id:               contest.id,
       name:             contest.name,
       state:            contest.state,
-      entryDeadline:    contest.entryDeadline.toISOString(),
+      entryDeadline:    contest.entryDeadline ? contest.entryDeadline.toISOString() : "",
       prizePoolPaise:   contest.prizePoolPaise,
       groups:           groupSummaries,
       isOpen:           contest.state === "open" && now < deadline,
-      isDeadlinePassed: now >= deadline,
+      isDeadlinePassed: deadline !== Infinity && now >= deadline,
     };
 
     return NextResponse.json(body, {

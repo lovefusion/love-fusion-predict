@@ -11,7 +11,6 @@ import {
   pgTable,
   text,
   integer,
-  bigint,
   boolean,
   timestamp,
   pgEnum,
@@ -270,7 +269,7 @@ export const organizerAccounts = pgTable("organizer_accounts", {
  * Never update or delete rows. Used for transparency and dispute resolution.
  */
 export const auditLog = pgTable("audit_log", {
-  id:            bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  id:            uuid("id").primaryKey().defaultRandom(),
   contestId:     uuid("contest_id").references(() => contests.id),
   organizerId:   uuid("organizer_id").references(() => organizerAccounts.id),
   action:        auditActionEnum("action").notNull(),

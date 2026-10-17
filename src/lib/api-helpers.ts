@@ -11,7 +11,8 @@ export type ApiErrorCode =
   | "SERVER_ERROR"
   | "UNAUTHORIZED"
   | "FORBIDDEN"
-  | "NOT_FOUND";
+  | "NOT_FOUND"
+  | "VALIDATION_ERROR";
 
 export function errorResponse(
   code: ApiErrorCode,

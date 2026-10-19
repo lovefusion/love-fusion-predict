@@ -5,7 +5,7 @@
  * deadline (25 Oct 00:00 IST) has passed. Safe to run repeatedly: it does nothing otherwise.
  * Transitions the active contest from "open" → "closed" if the deadline has passed.
  *
- * Schedule is in netlify.toml: `schedule = "*/10 * 24-26 10 *"`
+ * The schedule (every 10 minutes, 24-26 October) is set in the config below and in netlify.toml.
  */
 
 import { neon } from "@neondatabase/serverless";

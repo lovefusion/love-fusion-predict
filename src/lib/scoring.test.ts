@@ -254,3 +254,48 @@ describe("formatPaise", () => {
     expect(formatPaise(275_000)).toBe("₹2,750");
   });
 });
+
+
+// ─── Consolation prize (exactly 3 groups correct) ────────────────────────────
+
+describe("scoreEntry consolation", () => {
+  const officials = {
+    A: { qualifier1Id: "a1", qualifier2Id: "a2" },
+    B: { qualifier1Id: "b1", qualifier2Id: "b2" },
+    C: { qualifier1Id: "c1", qualifier2Id: "c2" },
+    D: { qualifier1Id: "d1", qualifier2Id: "d2" },
+  };
+  const right = (g: "A" | "B" | "C" | "D") => ({ teamId1: officials[g].qualifier2Id, teamId2: officials[g].qualifier1Id });
+  const wrong = (g: "A" | "B" | "C" | "D") => ({ teamId1: officials[g].qualifier1Id, teamId2: g.toLowerCase() + "3" });
+
+  it("TC-C1: 4 of 4 is the jackpot and NOT a consolation", () => {
+    const r = scoreEntry({ A: right("A"), B: right("B"), C: right("C"), D: right("D") }, officials);
+    expect(r.totalScore).toBe(4);
+    expect(r.isPerfect).toBe(true);
+    expect(r.isConsolation).toBe(false);
+  });
+
+  it("TC-C2: exactly 3 of 4 earns the consolation but not the jackpot", () => {
+    const r = scoreEntry({ A: right("A"), B: right("B"), C: right("C"), D: wrong("D") }, officials);
+    expect(r.totalScore).toBe(3);
+    expect(r.isPerfect).toBe(false);
+    expect(r.isConsolation).toBe(true);
+  });
+
+  it("TC-C3: 2, 1 or 0 of 4 earns nothing", () => {
+    const two = scoreEntry({ A: right("A"), B: right("B"), C: wrong("C"), D: wrong("D") }, officials);
+    const one = scoreEntry({ A: right("A"), B: wrong("B"), C: wrong("C"), D: wrong("D") }, officials);
+    const zero = scoreEntry({ A: wrong("A"), B: wrong("B"), C: wrong("C"), D: wrong("D") }, officials);
+    for (const r of [two, one, zero]) {
+      expect(r.isPerfect).toBe(false);
+      expect(r.isConsolation).toBe(false);
+    }
+  });
+
+  it("TC-C4: one correct pick in a group (half right) does not count as that group", () => {
+    const half = { teamId1: "a1", teamId2: "a3" };
+    const r = scoreEntry({ A: half, B: right("B"), C: right("C"), D: right("D") }, officials);
+    expect(r.totalScore).toBe(3);
+    expect(r.isConsolation).toBe(true);
+  });
+});

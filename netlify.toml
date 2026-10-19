@@ -39,4 +39,4 @@
 
 # ─── Scheduled function: auto-close at entry deadline ─────────────────────────
 [functions."scheduled-auto-close"]
-  schedule = "0 4 24 10 *"
+  schedule = "*/10 * 24-26 10 *"

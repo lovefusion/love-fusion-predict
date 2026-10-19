@@ -293,8 +293,9 @@ function LandingStep({
             <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Jackpot Prize</p>
             <p className="text-gradient-gold font-playfair text-5xl font-bold">{prizeDisplay}</p>
             <p className="text-white/50 text-sm mt-2">
-              Predict all 4 group qualifiers correctly and win!
+              Pick the top 2 teams in each of the 4 groups. Get all 8 picks right and win!
               Multiple winners share the prize equally.
+              Get exactly 3 groups right and win a Love Fusion T-shirt.
             </p>
           </div>
 
@@ -302,7 +303,7 @@ function LandingStep({
           <div className="grid grid-cols-3 gap-4 mb-10 text-center">
             {[
               { icon: "🎯", label: "Pick 2 teams per group" },
-              { icon: "✅", label: "Get all 4 right" },
+              { icon: "✅", label: "Get all 4 groups right" },
               { icon: "💰", label: `Win ${prizeDisplay}` },
             ].map(({ icon, label }) => (
               <div key={label} className="flex flex-col items-center gap-1.5">

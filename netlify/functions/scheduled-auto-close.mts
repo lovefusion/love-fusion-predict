@@ -1,10 +1,11 @@
 /**
  * Netlify Scheduled Function: scheduled-auto-close
  *
- * Fires at 04:00 UTC on 24 Oct 2026 (= 09:30 IST, 30 min before deadline).
+ * Runs every 10 minutes from 24 to 26 Oct 2026. It closes the contest once the entry
+ * deadline (25 Oct 00:00 IST) has passed. Safe to run repeatedly: it does nothing otherwise.
  * Transitions the active contest from "open" → "closed" if the deadline has passed.
  *
- * Schedule is in netlify.toml: `schedule = "0 4 24 10 *"`
+ * Schedule is in netlify.toml: `schedule = "*/10 * 24-26 10 *"`
  */
 
 import { neon } from "@neondatabase/serverless";
@@ -14,7 +15,7 @@ import { eq, and } from "drizzle-orm";
 import type { Config } from "@netlify/functions";
 
 export const config: Config = {
-  schedule: "0 4 24 10 *",
+  schedule: "*/10 * 24-26 10 *",
 };
 
 export default async function handler() {
@@ -42,21 +43,22 @@ export default async function handler() {
     for (const contest of toClose) {
       await db
         .update(contests)
-        .set({ state: "closed", updatedAt: now })
+        .set({ state: "closed", closedAt: now, updatedAt: now })
         .where(eq(contests.id, contest.id));
 
       await db.insert(auditLog).values({
+        contestId:  contest.id,
+        action:     "contest_state_changed",
         entityType: "contest",
         entityId:   contest.id,
-        action:     "state_transition",
-        actorType:  "system",
-        actorId:    "scheduled-auto-close",
-        metadata:   JSON.stringify({
-          from:       "open",
-          to:         "closed",
+        details:    {
+          from:        "open",
+          to:          "closed",
           triggeredAt: now.toISOString(),
-          reason:     "deadline_passed",
-        }),
+          reason:      "deadline_passed",
+          actor:       "scheduled-auto-close",
+        },
+        occurredAt: now,
       });
 
       console.log(`[auto-close] Closed contest ${contest.id} ("${contest.name}")`);

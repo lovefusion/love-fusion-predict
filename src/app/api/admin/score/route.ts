@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
       contestId,
       totalEntries: scoreRows.length,
       winnerCount: winners.length,
+      consolationCount: scoreRows.filter((s) => s.totalScore === 3).length,
     }, 200);
   }
 
@@ -215,6 +216,9 @@ export async function POST(request: NextRequest) {
         : String(e.submittedAt),
     }));
 
+  // Exactly 3 groups correct = consolation T-shirt (no money)
+  const consolationCount = scoredEntries.filter((e) => e.totalScore === 3).length;
+
   const prizeSummary = calculatePrize(winners, prizePoolPaise);
   const { allocations } = prizeSummary;
 
@@ -243,6 +247,7 @@ export async function POST(request: NextRequest) {
     details: {
       totalEntries: entryRows.length,
       winnerCount: winners.length,
+      consolationCount,
       prizePoolPaise,
       prizePoolFormatted: formatPaise(prizePoolPaise),
     },
@@ -254,6 +259,7 @@ export async function POST(request: NextRequest) {
     scoredAt: now.toISOString(),
     totalEntries: entryRows.length,
     winnerCount: winners.length,
+    consolationCount,
     prizePoolPaise,
     prizePoolFormatted: formatPaise(prizePoolPaise),
     newState: "scored",

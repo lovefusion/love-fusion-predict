@@ -8,7 +8,8 @@
  * - Each group awards 0 or 1 point.
  * - A group scores 1 iff the SET of 2 predicted team IDs equals the SET of 2 official qualifier IDs.
  * - Total score = sum of 4 group scores (0–4).
- * - Only a score of 4 qualifies for the prize.
+ * - Only a score of 4 qualifies for the jackpot (all 8 picks correct).
+ * - Exactly 3 groups correct earns the consolation prize (a T-shirt), never the jackpot.
  */
 
 /** Group labels used in this tournament */
@@ -24,6 +25,8 @@ export interface ScoringResult {
   totalScore: number;
   /** true iff totalScore === 4 */
   isPerfect: boolean;
+  /** true iff totalScore === 3 exactly (consolation T-shirt) */
+  isConsolation: boolean;
 }
 
 /**
@@ -101,8 +104,9 @@ export function scoreEntry(
 
   const totalScore = groupScores.A + groupScores.B + groupScores.C + groupScores.D;
   const isPerfect  = totalScore === 4;
+  const isConsolation = totalScore === 3;
 
-  return { groupScores, totalScore, isPerfect };
+  return { groupScores, totalScore, isPerfect, isConsolation };
 }
 
 // ─── Prize Calculation Engine ─────────────────────────────────────────────────

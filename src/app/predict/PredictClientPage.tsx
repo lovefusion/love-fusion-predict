@@ -48,8 +48,24 @@ export function PredictClientPage() {
 
   const [name,  setName]  = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [nameError,  setNameError]  = useState("");
   const [phoneError, setPhoneError] = useState("");
+  const [emailError, setEmailError] = useState("");
+
+  // Phone verification (WhatsApp code). Only used when the server has OTP switched on.
+  const [otpStage, setOtpStage]   = useState<"idle" | "code">("idle");
+  const [otpCode, setOtpCode]     = useState("");
+  const [otpError, setOtpError]   = useState("");
+  const [otpToken, setOtpToken]   = useState<string | null>(null);
+  const [otpBusy, setOtpBusy]     = useState(false);
+  const [resendIn, setResendIn]   = useState(0);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
 
   // ─── Fetch contest data ────────────────────────────────────────────────────
 
@@ -111,20 +127,50 @@ export function PredictClientPage() {
     } else {
       setPhoneError("");
     }
+    const trimmedEmail = email.trim();
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setEmailError("Please enter a valid email address, or leave it empty.");
+      valid = false;
+    } else {
+      setEmailError("");
+    }
     return valid;
+  }
+
+  function handlePhoneChange(v: string) {
+    setPhone(v);
+    // A code or verification belongs to one number: start again if the number changes.
+    if (otpToken || otpStage === "code") {
+      setOtpToken(null);
+      setOtpStage("idle");
+      setOtpCode("");
+      setOtpError("");
+    }
   }
 
   // ─── Submit ────────────────────────────────────────────────────────────────
 
-  async function handleSubmit() {
-    if (!validateDetails() || !contest) return;
+  type ApiReply = {
+    ok?: boolean;
+    code?: string;
+    message?: string;
+    otpRequired?: boolean;
+    otpToken?: string;
+    resendAfterSec?: number;
+  };
+
+  async function submitEntry(token: string | null) {
+    if (!contest) return;
     setSubmitLoading(true);
     setSubmitError(null);
 
+    const trimmedEmail = email.trim();
     const payload: EntrySubmissionPayload = {
       contestId: contest.id,
       participantName: name.trim(),
       participantPhone: phone.replace(/\D/g, ""),
+      ...(trimmedEmail ? { participantEmail: trimmedEmail } : {}),
+      ...(token ? { otpToken: token } : {}),
       predictions: GROUP_ORDER.map((g) => ({
         groupLabel: g,
         teamId1: selections[g][0]!,
@@ -140,7 +186,14 @@ export function PredictClientPage() {
       });
       const data: EntrySubmissionResponse | ApiError = await res.json();
       if (!res.ok || !("ok" in data) || !data.ok) {
-        setSubmitError((data as ApiError).message ?? "Submission failed. Please try again.");
+        const apiErr = data as ApiError;
+        // Verification missing or expired: ask for a fresh code on the next submit.
+        if (apiErr.code === "OTP_INVALID" || apiErr.code === "OTP_REQUIRED") {
+          setOtpToken(null);
+          setOtpStage("idle");
+          setOtpCode("");
+        }
+        setSubmitError(apiErr.message ?? "Submission failed. Please try again.");
         return;
       }
       setReceipt(data as EntrySubmissionResponse);
@@ -150,6 +203,92 @@ export function PredictClientPage() {
     } finally {
       setSubmitLoading(false);
     }
+  }
+
+  /** Ask the server to send a WhatsApp code. If OTP is off, the entry is submitted straight away. */
+  async function requestOtp(): Promise<
+    { status: "code" } | { status: "submitted" } | { status: "error"; message: string }
+  > {
+    if (!contest) return { status: "error", message: "Contest not loaded." };
+    try {
+      const res = await fetch("/api/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contestId: contest.id, phone: phone.replace(/\D/g, "") }),
+      });
+      const data: ApiReply = await res.json();
+      if (!res.ok || !data.ok) {
+        return { status: "error", message: data.message ?? "Could not send the code. Please try again." };
+      }
+      if (data.otpRequired) {
+        setOtpStage("code");
+        setOtpCode("");
+        setOtpError("");
+        setResendIn(data.resendAfterSec ?? 30);
+        return { status: "code" };
+      }
+      // OTP is off (or WhatsApp could not send and the site let this person through).
+      if (data.otpToken) setOtpToken(data.otpToken);
+      await submitEntry(data.otpToken ?? null);
+      return { status: "submitted" };
+    } catch {
+      return { status: "error", message: "Network error. Please try again." };
+    }
+  }
+
+  async function handleSubmit() {
+    if (!validateDetails() || !contest) return;
+    if (otpToken) {
+      await submitEntry(otpToken);
+      return;
+    }
+    setSubmitLoading(true);
+    setSubmitError(null);
+    const result = await requestOtp();
+    if (result.status === "error") setSubmitError(result.message);
+    setSubmitLoading(false);
+  }
+
+  async function handleVerify() {
+    if (!contest) return;
+    if (!/^\d{6}$/.test(otpCode)) {
+      setOtpError("Enter the 6-digit code.");
+      return;
+    }
+    setOtpBusy(true);
+    setOtpError("");
+    try {
+      const res = await fetch("/api/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contestId: contest.id,
+          phone: phone.replace(/\D/g, ""),
+          code: otpCode,
+        }),
+      });
+      const data: ApiReply = await res.json();
+      if (!res.ok || !data.ok || !data.otpToken) {
+        setOtpError(data.message ?? "Could not verify the code. Please try again.");
+        return;
+      }
+      setOtpToken(data.otpToken);
+      setOtpStage("idle");
+      setOtpBusy(false);
+      await submitEntry(data.otpToken);
+    } catch {
+      setOtpError("Network error. Please try again.");
+    } finally {
+      setOtpBusy(false);
+    }
+  }
+
+  async function handleResend() {
+    setOtpBusy(true);
+    setOtpError("");
+    const result = await requestOtp();
+    if (result.status === "error") setOtpError(result.message);
+    setOtpBusy(false);
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -208,12 +347,27 @@ export function PredictClientPage() {
       <DetailsStep
         name={name}
         phone={phone}
+        email={email}
         nameError={nameError}
         phoneError={phoneError}
+        emailError={emailError}
         submitError={submitError}
         loading={submitLoading}
         onNameChange={setName}
-        onPhoneChange={setPhone}
+        onPhoneChange={handlePhoneChange}
+        onEmailChange={setEmail}
+        otp={{
+          stage: otpStage,
+          code: otpCode,
+          error: otpError,
+          busy: otpBusy,
+          resendIn,
+          verified: otpToken !== null,
+          onCodeChange: (v: string) => { setOtpCode(v); setOtpError(""); },
+          onVerify: handleVerify,
+          onResend: handleResend,
+          onCancel: () => { setOtpStage("idle"); setOtpCode(""); setOtpError(""); },
+        }}
         onBack={() => { setStep("predict"); setSubmitError(null); }}
         onSubmit={handleSubmit}
         contest={contest}
@@ -464,15 +618,32 @@ function PredictStep({
   );
 }
 
+interface OtpUi {
+  stage: "idle" | "code";
+  code: string;
+  error: string;
+  busy: boolean;
+  resendIn: number;
+  verified: boolean;
+  onCodeChange: (v: string) => void;
+  onVerify: () => void;
+  onResend: () => void;
+  onCancel: () => void;
+}
+
 function DetailsStep({
   name,
   phone,
+  email,
   nameError,
   phoneError,
+  emailError,
   submitError,
   loading,
   onNameChange,
   onPhoneChange,
+  onEmailChange,
+  otp,
   onBack,
   onSubmit,
   contest,
@@ -480,12 +651,16 @@ function DetailsStep({
 }: {
   name: string;
   phone: string;
+  email: string;
   nameError: string;
   phoneError: string;
+  emailError: string;
   submitError: string | null;
   loading: boolean;
   onNameChange: (v: string) => void;
   onPhoneChange: (v: string) => void;
+  onEmailChange: (v: string) => void;
+  otp: OtpUi;
   onBack: () => void;
   onSubmit: () => void;
   contest: ContestPublicInfo;
@@ -534,7 +709,8 @@ function DetailsStep({
           Your Details
         </h2>
         <p className="text-white/40 text-sm mb-6">
-          We&apos;ll use these to contact you if you win. No spam.
+          We&apos;ll use these to contact you if you win. We may send a 6-digit code to your
+          WhatsApp to confirm your number.
         </p>
 
         <div className="space-y-5">
@@ -556,9 +732,69 @@ function DetailsStep({
             inputMode="tel"
             autoComplete="tel"
             required
+            disabled={otp.stage === "code"}
             hint="10-digit Indian mobile number, no country code"
           />
+          {otp.verified && otp.stage === "idle" && (
+            <p className="text-xs text-emerald-400 -mt-3">✓ Mobile number verified</p>
+          )}
+          <Input
+            id="email"
+            label="Email (optional)"
+            type="email"
+            placeholder="priya@example.com"
+            value={email}
+            onChange={(e) => onEmailChange(e.target.value)}
+            error={emailError}
+            inputMode="email"
+            autoComplete="email"
+            hint="Optional. Used for contest updates."
+          />
         </div>
+
+        {otp.stage === "code" && (
+          <div className="mt-6 rounded-2xl border border-gold-400/25 bg-gold-500/5 p-5 space-y-4">
+            <p className="text-sm text-white/80">
+              We sent a 6-digit code to your WhatsApp{" "}
+              <span className="font-medium text-white">+91 {phone}</span>.
+            </p>
+            <Input
+              label="Verification code"
+              placeholder="123456"
+              value={otp.code}
+              onChange={(e) => otp.onCodeChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              error={otp.error}
+            />
+            <Button
+              size="lg"
+              onClick={otp.onVerify}
+              loading={otp.busy}
+              disabled={otp.code.length !== 6}
+              className="w-full"
+            >
+              Verify &amp; Submit 🏸
+            </Button>
+            <div className="flex items-center justify-between text-xs text-white/40">
+              <button type="button" onClick={otp.onCancel} className="hover:text-white transition-colors">
+                Change number
+              </button>
+              {otp.resendIn > 0 ? (
+                <span>Resend code in {otp.resendIn}s</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={otp.onResend}
+                  disabled={otp.busy}
+                  className="text-gold-400 hover:text-gold-300 transition-colors"
+                >
+                  Resend code
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {submitError && (
           <div className="mt-5 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400">
@@ -566,19 +802,21 @@ function DetailsStep({
           </div>
         )}
 
-        <div className="mt-8 space-y-3">
-          <Button
-            size="lg"
-            onClick={onSubmit}
-            loading={loading}
-            className="w-full"
-          >
-            Submit Prediction 🏸
-          </Button>
-          <p className="text-center text-white/25 text-xs">
-            By submitting, you confirm your picks are final.
-          </p>
-        </div>
+        {otp.stage === "idle" && (
+          <div className="mt-8 space-y-3">
+            <Button
+              size="lg"
+              onClick={onSubmit}
+              loading={loading}
+              className="w-full"
+            >
+              Submit Prediction 🏸
+            </Button>
+            <p className="text-center text-white/25 text-xs">
+              By submitting, you confirm your picks are final.
+            </p>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -594,6 +832,38 @@ function ReceiptStep({
   selections: SelectionMap;
 }) {
   const [copied, setCopied] = useState(false);
+
+  // Pet-parent popup: appears a moment after the receipt. The entry is already saved,
+  // so this can never block or lose an entry. Skipping leaves the answer "not given".
+  const [petOpen, setPetOpen]     = useState(false);
+  const [petSaving, setPetSaving] = useState(false);
+  const [petError, setPetError]   = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setPetOpen(true), 900);
+    return () => clearTimeout(t);
+  }, []);
+
+  async function answerPet(isPetParent: boolean) {
+    setPetSaving(true);
+    setPetError("");
+    try {
+      const res = await fetch("/api/pet-parent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: receipt.privateToken, isPetParent }),
+      });
+      if (!res.ok) {
+        setPetError("Could not save your answer. Please try again, or skip.");
+        return;
+      }
+      setPetOpen(false);
+    } catch {
+      setPetError("Could not save your answer. Please try again, or skip.");
+    } finally {
+      setPetSaving(false);
+    }
+  }
 
   async function copyCode() {
     try {
@@ -706,6 +976,50 @@ function ReceiptStep({
           Submit Another Entry
         </Button>
       </div>
+
+      {petOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pet-parent-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-gold-400/30 bg-obsidian-800 p-6 text-center">
+            <p className="text-4xl mb-3" aria-hidden>🐾</p>
+            <h2 id="pet-parent-title" className="font-playfair text-2xl font-bold text-white mb-2">
+              Are you a pet parent?
+            </h2>
+            <p className="text-white/60 text-sm mb-1">
+              Do you have a dog or cat at home?
+            </p>
+            <p className="text-white/35 text-xs mb-5">
+              Optional, and nothing to do with the contest. Pet parents may get occasional
+              pet-care tips and offers from Mowgly Ventures on WhatsApp.
+            </p>
+
+            {petError && (
+              <p className="text-xs text-red-400 mb-3">{petError}</p>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <Button size="md" onClick={() => answerPet(true)} loading={petSaving}>
+                Yes 🐶🐱
+              </Button>
+              <Button size="md" variant="outline" onClick={() => answerPet(false)} disabled={petSaving}>
+                No
+              </Button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPetOpen(false)}
+              disabled={petSaving}
+              className="text-white/30 hover:text-white/60 text-xs transition-colors"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

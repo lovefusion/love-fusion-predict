@@ -58,6 +58,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       fullName: participants.fullName,
       whatsapp: participants.whatsapp,
       email: participants.email,
+      isPetParent: participants.isPetParent,
     })
     .from(entries)
     .innerJoin(participants, eq(entries.participantId, participants.id))
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (type === "consolation") rows = rows.filter((r) => scoreByEntry[r.entryId]?.totalScore === 3);
 
   const header = [
-    "Receipt code", "Name", "Mobile", "Email", "Submitted (IST)",
+    "Receipt code", "Name", "Mobile", "Email", "Pet parent", "Submitted (IST)",
     ...GROUPS.map((g) => `Group ${g} picks`),
     "Groups correct", "Prize",
   ];
@@ -106,6 +107,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       r.fullName,
       full ? r.whatsapp : "******" + r.whatsapp.slice(-4),
       r.email ?? "",
+      r.isPetParent === true ? "Yes" : r.isPetParent === false ? "No" : "Not answered",
       new Date(r.submittedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
       ...GROUPS.map((g) => (picks[r.entryId]?.[g] ?? []).join(" + ")),
       hasScores ? (sc?.totalScore ?? "") : "not scored yet",

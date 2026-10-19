@@ -22,11 +22,11 @@ Stack: Next.js 14 (App Router) + Netlify (paid) + Neon PostgreSQL + Drizzle ORM 
 
 - **16 teams**, 4 groups (A/B/C/D), 4 teams each
 - Predict the **top 2 qualifiers** per group (order irrelevant — set equality)
-- **Scoring**: 1 point per correct group. Only **4/4** earns the jackpot.
+- **Scoring**: 1 point per correct group. **4/4** earns the jackpot; **exactly 3/4** earns a Love Fusion T-shirt (no cash). 2 or fewer earns nothing.
 - **Prize**: ₹11,000 (= 1,100,000 paise) split equally among winners.
   - Residual paise → earliest submittedAt, then lex-smallest entryId as tie-break.
   - `calculatePrize()` in `src/lib/scoring.ts` is the canonical implementation.
-- **Entry deadline**: 2026-10-24T04:30:00Z (= 10:00 AM IST)
+- **Entry deadline**: stored in the database (`contests.entry_deadline`), currently 2026-10-24T18:30:00Z (= 25 Oct 2026, 00:00 IST). The `CONTEST_ENTRY_DEADLINE` env var is NOT used by the code.
 
 ## Team Groups (DO NOT CHANGE WITHOUT CHECKING TOURNAMENT SCHEDULE)
 
@@ -135,10 +135,16 @@ CLOUDINARY_API_KEY
 CLOUDINARY_API_SECRET
 ADMIN_SECRET_KEY                     # Bearer token for /admin endpoints
 ADMIN_EMAILS                         # needhihegde@gmail.com,... (comma-separated)
-CONTEST_ENTRY_DEADLINE               # 2026-10-24T04:30:00Z
+CONTEST_ENTRY_DEADLINE               # (unused - the deadline lives in the DB)
 CONTEST_PRIZE_POOL_PAISE             # 1100000
 CRON_SECRET                          # Validate scheduled function calls
-N8N_WEBHOOK_URL                      # Optional: post-submission notification
+OTP_ENABLED                          # "true" = require WhatsApp OTP; anything else = OFF
+OTP_FAIL_OPEN                        # "false" = block entries if WhatsApp cannot send; default = let people through
+WHATSAPP_ACCESS_TOKEN                # Meta permanent token (secret - Netlify only)
+WHATSAPP_PHONE_NUMBER_ID             # Meta phone number ID
+WHATSAPP_OTP_TEMPLATE                # approved authentication template name (default lf_otp)
+WHATSAPP_OTP_LANG                    # template language (default en)
+N8N_WEBHOOK_URL                      # Optional: post-submission notification (not wired up)
 N8N_WEBHOOK_SECRET                   # Optional
 NEXT_PUBLIC_BASE_URL                 # https://your-domain.netlify.app
 ```
@@ -201,6 +207,17 @@ NEXT_PUBLIC_BASE_URL                 # https://your-domain.netlify.app
 - [x] `netlify.toml` with security headers + scheduled function
 - [x] Netlify scheduled function for auto-close at deadline
 - [x] `tailwind.config.ts` — full design system (gold/obsidian/white)
+
+---
+
+## Phone verification (WhatsApp OTP) + extra fields
+
+- Flow: `/api/otp/send` -> WhatsApp code -> `/api/otp/verify` -> one-time `otpToken` -> `POST /api/entries`.
+- Off by default. Turn on with `OTP_ENABLED=true` (then trigger a new Netlify deploy).
+- Codes and tokens are stored hashed in `phone_otps`; 5 wrong tries per code; 30 s resend gap; 4 codes per phone per 10 min.
+- If WhatsApp fails on OUR side (app not live, template not approved, bad token) and `OTP_FAIL_OPEN` is not "false", the person is let through and the `phone_otps` row is marked `method = 'bypass'`.
+- Email is optional (`participants.email`). Pet-parent answer is `participants.is_pet_parent` (NULL = not answered, true = Yes, false = No), saved by `POST /api/pet-parent` from the popup shown after the entry is saved.
+- Code: `src/lib/otp.ts`, `src/app/api/otp/*`, `src/app/api/pet-parent/route.ts`.
 
 ---
 

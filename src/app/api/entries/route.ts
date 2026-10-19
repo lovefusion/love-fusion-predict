@@ -13,16 +13,19 @@
  * - Each prediction must reference 2 distinct teams in the correct group
  * - Participant phone must not have an existing entry for this contest
  * - Rate limited: 5 submissions per IP per minute
+ * - When OTP_ENABLED=true, a valid phone-verification token (otpToken) is required
+ * - participantEmail is optional
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { db } from "@/db";
-import { contests, groups, teams, participants, entries, predictions, auditLog } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { contests, groups, teams, participants, entries, predictions, auditLog, phoneOtps } from "@/db/schema";
+import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { errorResponse, okResponse, isValidPhone, isValidName } from "@/lib/api-helpers";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { isOtpEnabled, sha256Hex, OTP_TOKEN_TTL_MS } from "@/lib/otp";
 import type { EntrySubmissionResponse } from "@/lib/types";
 
 export const runtime = "edge";
@@ -33,6 +36,13 @@ const EntrySchema = z.object({
   contestId:        z.string().min(1),
   participantName:  z.string().min(2).max(100),
   participantPhone: z.string().regex(/^[6-9]\d{9}$/, "Invalid Indian mobile number"),
+  // Optional. An empty box is treated as "not given".
+  participantEmail: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().trim().max(254).email("Please enter a valid email address.").optional(),
+  ),
+  // Proof of phone verification (only checked when OTP_ENABLED=true).
+  otpToken:         z.string().length(64).optional(),
   predictions: z
     .array(
       z.object({
@@ -79,7 +89,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return errorResponse("INVALID_INPUT", firstError, 400);
   }
 
-  const { contestId, participantName, participantPhone, predictions: preds } = parsed.data;
+  const { contestId, participantName, participantPhone, participantEmail, otpToken, predictions: preds } = parsed.data;
 
   // ── Load contest ───────────────────────────────────────────────────────────
   const [contest] = await db
@@ -159,6 +169,52 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // ── Phone verification (only when OTP_ENABLED=true) ────────────────────────
+  // The token comes from /api/otp/verify (or from /api/otp/send when WhatsApp failed on
+  // our side and OTP_FAIL_OPEN lets the person through). It is claimed atomically so that
+  // one verification can only ever produce one entry.
+  let claimedOtpId: string | null = null;
+  if (isOtpEnabled()) {
+    if (!otpToken) {
+      return errorResponse("OTP_REQUIRED", "Please verify your mobile number to submit.", 403);
+    }
+    const tokenHash = await sha256Hex(otpToken);
+    const [otpRow] = await db
+      .select()
+      .from(phoneOtps)
+      .where(
+        and(
+          eq(phoneOtps.tokenHash, tokenHash),
+          eq(phoneOtps.phone, participantPhone),
+          eq(phoneOtps.contestId, contestId),
+        ),
+      )
+      .limit(1);
+
+    const verifiedAtMs = otpRow?.verifiedAt ? new Date(otpRow.verifiedAt).getTime() : 0;
+    if (!otpRow || !verifiedAtMs || now - verifiedAtMs > OTP_TOKEN_TTL_MS) {
+      return errorResponse(
+        "OTP_INVALID",
+        "Your mobile verification has expired. Please verify again.",
+        403,
+      );
+    }
+
+    const claimed = await db
+      .update(phoneOtps)
+      .set({ consumedAt: new Date() })
+      .where(and(eq(phoneOtps.id, otpRow.id), isNull(phoneOtps.consumedAt)))
+      .returning({ id: phoneOtps.id });
+    if (claimed.length === 0) {
+      return errorResponse(
+        "OTP_INVALID",
+        "This verification was already used. Please verify again.",
+        403,
+      );
+    }
+    claimedOtpId = otpRow.id;
+  }
+
   // ── Write to DB (participant → entry → predictions → audit) ───────────────
   const receiptCode    = generateReceiptCode();
   const privateToken   = generatePrivateToken();
@@ -177,6 +233,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         contestId,
         fullName:  participantName.trim(),
         whatsapp:  participantPhone,
+        email:     participantEmail ?? null,
       });
       participantDbId = participantId;
     }
@@ -209,7 +266,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       entityType: "entry",
       entityId:   entryId,
       action:     "entry_submitted",
-      details:    { phone: participantPhone.slice(-4), ip },
+      details:    { phone: participantPhone.slice(-4), ip, phoneVerified: claimedOtpId !== null },
       occurredAt: submittedAt,
     });
 
@@ -225,6 +282,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return okResponse(response, 201);
   } catch (err) {
     console.error("[POST /api/entries] DB error:", err);
+    // The entry was not saved, so give the verification back and let the person retry.
+    if (claimedOtpId) {
+      try {
+        await db.update(phoneOtps).set({ consumedAt: null }).where(eq(phoneOtps.id, claimedOtpId));
+      } catch {
+        /* nothing more we can do; the person will be asked to verify again */
+      }
+    }
     return errorResponse("SERVER_ERROR", "Failed to save entry. Please try again.", 500);
   }
 }

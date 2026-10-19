@@ -141,6 +141,8 @@ export const participants = pgTable("participants", {
   fullName:        text("full_name").notNull(),
   whatsapp:        varchar("whatsapp", { length: 20 }).notNull(),
   email:           varchar("email", { length: 254 }),
+  /** Pet-parent answer from the post-entry popup. NULL = not answered, true = Yes, false = No. */
+  isPetParent:     boolean("is_pet_parent"),
   category:        participantCategoryEnum("category").notNull().default("spectator"),
   teamAffiliation: text("team_affiliation"),
   ipAddress:       varchar("ip_address", { length: 45 }), // stored for dedup; masked in UI
@@ -172,6 +174,30 @@ export const entries = pgTable("entries", {
     .on(t.contestId, t.participantId),
   idxContestId:           index("idx_entries_contest_id").on(t.contestId),
   idxPrivateToken:        index("idx_entries_private_token").on(t.privateToken),
+}));
+
+/**
+ * Phone verification (WhatsApp OTP). One row per code sent.
+ * The 6-digit code and the verification token are stored HASHED only (never in plain text).
+ * method: "whatsapp" = code was sent and entered correctly; "bypass" = WhatsApp sending
+ * failed on our side and the site let the person through (see OTP_FAIL_OPEN).
+ */
+export const phoneOtps = pgTable("phone_otps", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  contestId:  uuid("contest_id").notNull().references(() => contests.id, { onDelete: "cascade" }),
+  phone:      varchar("phone", { length: 20 }).notNull(),
+  codeHash:   varchar("code_hash", { length: 64 }).notNull(),
+  method:     varchar("method", { length: 20 }).notNull().default("whatsapp"),
+  attempts:   integer("attempts").notNull().default(0),
+  expiresAt:  timestamp("expires_at", { withTimezone: true }).notNull(),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  tokenHash:  varchar("token_hash", { length: 64 }),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  ipAddress:  varchar("ip_address", { length: 45 }),
+  createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  idxPhone:     index("idx_phone_otps_phone").on(t.phone, t.createdAt),
+  idxTokenHash: index("idx_phone_otps_token_hash").on(t.tokenHash),
 }));
 
 /**

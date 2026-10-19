@@ -216,7 +216,7 @@ NEXT_PUBLIC_BASE_URL                 # https://your-domain.netlify.app
 - Off by default. Turn on with `OTP_ENABLED=true` (then trigger a new Netlify deploy).
 - Codes and tokens are stored hashed in `phone_otps`; 5 wrong tries per code; 30 s resend gap; 4 codes per phone per 10 min.
 - If WhatsApp fails on OUR side (app not live, template not approved, bad token) and `OTP_FAIL_OPEN` is not "false", the person is let through and the `phone_otps` row is marked `method = 'bypass'`.
-- Email is optional (`participants.email`). Pet-parent answer is `participants.is_pet_parent` (NULL = not answered, true = Yes, false = No), saved by `POST /api/pet-parent` from the popup shown after the entry is saved.
+- Email is optional (`participants.email`). Pet-parent Yes/No is a MANDATORY question on the details form; it is sent with the entry and saved to `participants.is_pet_parent` (true = Yes, false = No, NULL = no answer, e.g. entries made before this existed). `POST /api/pet-parent` is a leftover from an earlier popup design and is not used by the form.
 - Code: `src/lib/otp.ts`, `src/app/api/otp/*`, `src/app/api/pet-parent/route.ts`.
 
 ---

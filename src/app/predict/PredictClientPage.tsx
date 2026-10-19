@@ -52,6 +52,9 @@ export function PredictClientPage() {
   const [nameError,  setNameError]  = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [emailError, setEmailError] = useState("");
+  // Mandatory Yes/No question. null = not answered yet (blocks submitting).
+  const [isPetParent, setIsPetParent] = useState<boolean | null>(null);
+  const [petError, setPetError]       = useState("");
 
   // Phone verification (WhatsApp code). Only used when the server has OTP switched on.
   const [otpStage, setOtpStage]   = useState<"idle" | "code">("idle");
@@ -134,6 +137,12 @@ export function PredictClientPage() {
     } else {
       setEmailError("");
     }
+    if (isPetParent === null) {
+      setPetError("Please choose Yes or No.");
+      valid = false;
+    } else {
+      setPetError("");
+    }
     return valid;
   }
 
@@ -170,6 +179,7 @@ export function PredictClientPage() {
       participantName: name.trim(),
       participantPhone: phone.replace(/\D/g, ""),
       ...(trimmedEmail ? { participantEmail: trimmedEmail } : {}),
+      ...(isPetParent !== null ? { isPetParent } : {}),
       ...(token ? { otpToken: token } : {}),
       predictions: GROUP_ORDER.map((g) => ({
         groupLabel: g,
@@ -356,6 +366,9 @@ export function PredictClientPage() {
         onNameChange={setName}
         onPhoneChange={handlePhoneChange}
         onEmailChange={setEmail}
+        petParent={isPetParent}
+        petError={petError}
+        onPetParentChange={(v: boolean) => { setIsPetParent(v); setPetError(""); }}
         otp={{
           stage: otpStage,
           code: otpCode,
@@ -643,6 +656,9 @@ function DetailsStep({
   onNameChange,
   onPhoneChange,
   onEmailChange,
+  petParent,
+  petError,
+  onPetParentChange,
   otp,
   onBack,
   onSubmit,
@@ -660,6 +676,9 @@ function DetailsStep({
   onNameChange: (v: string) => void;
   onPhoneChange: (v: string) => void;
   onEmailChange: (v: string) => void;
+  petParent: boolean | null;
+  petError: string;
+  onPetParentChange: (v: boolean) => void;
   otp: OtpUi;
   onBack: () => void;
   onSubmit: () => void;
@@ -750,6 +769,46 @@ function DetailsStep({
             autoComplete="email"
             hint="Optional. Used for contest updates."
           />
+
+          <div>
+            <p className="text-sm font-medium text-white/80">
+              Are you a pet parent? <span className="text-red-400" aria-hidden>*</span>
+            </p>
+            <p className="text-xs text-white/40 mb-3">Do you have a dog or cat at home?</p>
+            <div className="grid grid-cols-2 gap-3" role="group" aria-label="Are you a pet parent?">
+              {([
+                { value: true, label: "Yes 🐶🐱" },
+                { value: false, label: "No" },
+              ] as const).map((opt) => (
+                <button
+                  key={String(opt.value)}
+                  type="button"
+                  onClick={() => onPetParentChange(opt.value)}
+                  aria-pressed={petParent === opt.value}
+                  disabled={otp.stage === "code"}
+                  className={`rounded-xl border px-4 py-3 text-base font-medium transition-all ${
+                    petParent === opt.value
+                      ? "border-gold-400 bg-gold-500/15 text-gold-300"
+                      : petError
+                        ? "border-red-500/60 bg-obsidian-800 text-white/70"
+                        : "border-obsidian-600 bg-obsidian-800 text-white/70 hover:border-obsidian-500"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {petError ? (
+              <p className="mt-2 flex items-center gap-1 text-xs text-red-400">
+                <span aria-hidden>⚠</span>
+                {petError}
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-white/30">
+                Pet parents may get occasional pet-care tips and offers from Mowgly Ventures on WhatsApp.
+              </p>
+            )}
+          </div>
         </div>
 
         {otp.stage === "code" && (
@@ -832,38 +891,6 @@ function ReceiptStep({
   selections: SelectionMap;
 }) {
   const [copied, setCopied] = useState(false);
-
-  // Pet-parent popup: appears a moment after the receipt. The entry is already saved,
-  // so this can never block or lose an entry. Skipping leaves the answer "not given".
-  const [petOpen, setPetOpen]     = useState(false);
-  const [petSaving, setPetSaving] = useState(false);
-  const [petError, setPetError]   = useState("");
-
-  useEffect(() => {
-    const t = setTimeout(() => setPetOpen(true), 900);
-    return () => clearTimeout(t);
-  }, []);
-
-  async function answerPet(isPetParent: boolean) {
-    setPetSaving(true);
-    setPetError("");
-    try {
-      const res = await fetch("/api/pet-parent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: receipt.privateToken, isPetParent }),
-      });
-      if (!res.ok) {
-        setPetError("Could not save your answer. Please try again, or skip.");
-        return;
-      }
-      setPetOpen(false);
-    } catch {
-      setPetError("Could not save your answer. Please try again, or skip.");
-    } finally {
-      setPetSaving(false);
-    }
-  }
 
   async function copyCode() {
     try {
@@ -977,49 +1004,6 @@ function ReceiptStep({
         </Button>
       </div>
 
-      {petOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pet-parent-title"
-        >
-          <div className="w-full max-w-sm rounded-2xl border border-gold-400/30 bg-obsidian-800 p-6 text-center">
-            <p className="text-4xl mb-3" aria-hidden>🐾</p>
-            <h2 id="pet-parent-title" className="font-playfair text-2xl font-bold text-white mb-2">
-              Are you a pet parent?
-            </h2>
-            <p className="text-white/60 text-sm mb-1">
-              Do you have a dog or cat at home?
-            </p>
-            <p className="text-white/35 text-xs mb-5">
-              Optional, and nothing to do with the contest. Pet parents may get occasional
-              pet-care tips and offers from Mowgly Ventures on WhatsApp.
-            </p>
-
-            {petError && (
-              <p className="text-xs text-red-400 mb-3">{petError}</p>
-            )}
-
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <Button size="md" onClick={() => answerPet(true)} loading={petSaving}>
-                Yes 🐶🐱
-              </Button>
-              <Button size="md" variant="outline" onClick={() => answerPet(false)} disabled={petSaving}>
-                No
-              </Button>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPetOpen(false)}
-              disabled={petSaving}
-              className="text-white/30 hover:text-white/60 text-xs transition-colors"
-            >
-              Skip
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

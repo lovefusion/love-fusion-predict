@@ -61,6 +61,7 @@ export interface EntrySubmissionPayload {
   participantName: string;
   participantPhone: string;
   participantEmail?: string;          // optional
+  isPetParent?: boolean;              // answer to the mandatory pet-parent question
   otpToken?: string;                  // from /api/otp/verify, only when OTP is switched on
   predictions: PredictionInput[];     // exactly 4, one per group
 }

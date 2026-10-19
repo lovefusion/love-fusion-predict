@@ -15,6 +15,7 @@
  * - Rate limited: 5 submissions per IP per minute
  * - When OTP_ENABLED=true, a valid phone-verification token (otpToken) is required
  * - participantEmail is optional
+ * - isPetParent (Yes/No) is asked on the form; stored after the entry is saved
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -41,6 +42,8 @@ const EntrySchema = z.object({
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
     z.string().trim().max(254).email("Please enter a valid email address.").optional(),
   ),
+  // Answer to the pet-parent question (the form makes it mandatory).
+  isPetParent:      z.boolean().optional(),
   // Proof of phone verification (only checked when OTP_ENABLED=true).
   otpToken:         z.string().length(64).optional(),
   predictions: z
@@ -89,7 +92,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return errorResponse("INVALID_INPUT", firstError, 400);
   }
 
-  const { contestId, participantName, participantPhone, participantEmail, otpToken, predictions: preds } = parsed.data;
+  const { contestId, participantName, participantPhone, participantEmail, isPetParent, otpToken, predictions: preds } = parsed.data;
 
   // ── Load contest ───────────────────────────────────────────────────────────
   const [contest] = await db
@@ -259,6 +262,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ];
     });
     await db.insert(predictions).values(predValues);
+
+    // Pet-parent answer. Saved after the entry itself, so a problem here can never lose an entry.
+    if (isPetParent !== undefined) {
+      try {
+        await db
+          .update(participants)
+          .set({ isPetParent })
+          .where(eq(participants.id, participantDbId));
+      } catch (err) {
+        console.error("[POST /api/entries] could not save pet-parent answer:", err);
+      }
+    }
 
     // Audit log
     await db.insert(auditLog).values({

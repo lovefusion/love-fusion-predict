@@ -12,7 +12,7 @@
  * - Exactly 4 predictions, one per group A/B/C/D
  * - Each prediction must reference 2 distinct teams in the correct group
  * - Participant phone must not have an existing entry for this contest
- * - Rate limited: 5 submissions per IP per minute
+ * - Rate limited: 30 submissions per IP per minute (high enough for a whole venue sharing one Wi-Fi)
  * - When OTP_ENABLED=true, a valid phone-verification token (otpToken) is required
  * - participantEmail is optional
  * - isPetParent (Yes/No) is asked on the form; stored after the entry is saved
@@ -74,7 +74,7 @@ function generatePrivateToken(): string {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // ── Rate limiting ──────────────────────────────────────────────────────────
   const ip = getClientIp(request);
-  if (!checkRateLimit(`entry:${ip}`, 5)) {
+  if (!checkRateLimit(`entry:${ip}`, 30)) {
     return errorResponse("RATE_LIMITED", "Too many submissions. Please wait a minute.", 429);
   }
 

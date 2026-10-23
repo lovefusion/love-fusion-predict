@@ -890,16 +890,41 @@ function ReceiptStep({
   contest: ContestPublicInfo;
   selections: SelectionMap;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"code" | "link" | null>(null);
+  const [copyFailed, setCopyFailed] = useState(false);
 
-  async function copyCode() {
+  // The person's private page, where they can come back later to see their score.
+  const resultLink =
+    (typeof window !== "undefined" ? window.location.origin : "") + "/entry/" + receipt.privateToken;
+
+  /** Copy text to the clipboard. Falls back to the old method for browsers that block the new one. */
+  async function copyText(text: string): Promise<boolean> {
     try {
-      await navigator.clipboard.writeText(receipt.receiptCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      await navigator.clipboard.writeText(text);
+      return true;
     } catch {
-      /* clipboard blocked */
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        return ok;
+      } catch {
+        return false;
+      }
     }
+  }
+
+  async function handleCopy(kind: "code" | "link") {
+    const ok = await copyText(kind === "code" ? receipt.receiptCode : resultLink);
+    setCopyFailed(!ok);
+    setCopied(ok ? kind : null);
+    if (ok) setTimeout(() => setCopied(null), 2500);
   }
 
   const submittedStr = new Date(receipt.submittedAt).toLocaleString("en-IN", {
@@ -946,17 +971,23 @@ function ReceiptStep({
             <p className="text-white/30 text-xs mb-1">Your Receipt Code</p>
             <button
               type="button"
-              onClick={copyCode}
+              onClick={() => handleCopy("code")}
               className="text-gradient-gold font-playfair text-2xl font-bold tracking-[0.15em] hover:opacity-80 transition-opacity"
               title="Click to copy"
             >
               {receipt.receiptCode}
             </button>
-            {copied && (
-              <p className="text-emerald-400 text-xs mt-1">Copied!</p>
-            )}
-            {!copied && (
-              <p className="text-white/20 text-xs mt-1">Tap to copy</p>
+            <button
+              type="button"
+              onClick={() => handleCopy("code")}
+              className="mt-3 inline-flex items-center gap-2 rounded-lg border border-gold-400/40 px-4 py-2 text-sm font-medium text-gold-300 hover:bg-gold-500/10 transition-colors"
+            >
+              {copied === "code" ? "✓ Code copied" : "📋 Copy code"}
+            </button>
+            {copyFailed && (
+              <p className="text-red-400 text-xs mt-2">
+                Could not copy automatically. Please select the code and copy it by hand.
+              </p>
             )}
           </div>
 
@@ -993,6 +1024,18 @@ function ReceiptStep({
             Results announced after the tournament on 25 October 2026.
           </p>
         </div>
+
+        <Button
+          variant="outline"
+          size="md"
+          className="w-full mb-3"
+          onClick={() => handleCopy("link")}
+        >
+          {copied === "link" ? "✓ Link copied" : "🔗 Copy my private result link"}
+        </Button>
+        <p className="text-center text-white/30 text-xs mb-6">
+          Keep this link to see your score here after the results. Do not share it.
+        </p>
 
         <Button
           variant="outline"

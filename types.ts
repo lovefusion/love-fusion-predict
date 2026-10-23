@@ -30,6 +30,8 @@ export interface TeamSummary {
   captainName: string | null;
   logoUrl: string | null;
   captainImageUrl: string | null;
+  /** true when the admin has marked this team OUT of the tournament */
+  eliminated?: boolean;
 }
 
 export interface GroupSummary {
@@ -86,6 +88,9 @@ export interface EntryReceiptView {
     groupLabel: GroupLabel;
     team1Name: string;
     team2Name: string;
+    /** true when that picked team has been marked OUT of the tournament */
+    team1Out?: boolean;
+    team2Out?: boolean;
   }[];
   scores?: {
     groupLabel: GroupLabel;
